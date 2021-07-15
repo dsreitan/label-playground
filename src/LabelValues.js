@@ -1,28 +1,26 @@
 import { useState, useRef, memo, useCallback } from "react"
-import { ForceGraph2D, ForceGraph3D } from 'react-force-graph';
-import { apiCall, delay } from "./helpers";
+import { ForceGraph2D, ForceGraph3D } from 'react-force-graph'
+import { apiCall, delay } from "./helpers"
 
-const GetContentType = (n) => {
-  switch (n) {
+const GetContentType = (level) => {
+  switch (level) {
     case 1: return "root"
-    default: return `child ${n - 1}`
+    default: return `child ${level - 1}`
   }
 }
 
 const normalizeValues = (jsonArray) => {
-  if (!jsonArray || jsonArray.length === 0) return [];
+  if (!jsonArray || jsonArray.length === 0) return []
 
   return jsonArray.map(x => {
-    let vArr = x.value.split("/");
-    let pArr = x.parentValue?.split("/") || [];
-    const firstAncestor = vArr[0];
-    const lastValue = vArr[vArr.length - 1]
-    const lastParent = pArr[pArr.length - 1];
+    let values = x.value.split("/")
+    let parents = x.parentValue?.split("/") || []
+    const lastValue = values[values.length - 1]
+    const lastParent = parents[parents.length - 1]
 
     return {
-      level: vArr.length,
-      contentType: GetContentType(vArr.length),
-      firstAncestor,
+      level: values.length,
+      contentType: GetContentType(values.length),
       lastParent,
       lastValue,
       value: x.value,
@@ -42,10 +40,11 @@ const mapToTree = (normalizedValues) => {
   }
 }
 
+// treat nodes with duplicate "leaf node" as the same
 const mapToGraph = (normalizedValues) => {
   return {
     nodes: normalizedValues
-      .filter((v, i, a) => a.findIndex(t => (t.lastValue === v.lastValue)) === i)
+      // .filter((v, i, a) => a.findIndex(t => (t.lastValue === v.lastValue)) === i) //TODO: fix duplicates
       .map(x => { return { id: x.value, ...x } }),
     links: normalizedValues
       .filter(x => x.parentValue)
@@ -56,52 +55,48 @@ const mapToGraph = (normalizedValues) => {
 
 
 export default memo(props => {
-  const labelKey = props.labelKey;
-  const valuePrefix = useRef();
-  const partialName = useRef();
-  const labelValueValue = useRef();
-  const labelValueParentValue = useRef();
-  const labelValueName = useRef();
-  const graphRef = useRef();
-  const labelValueUpdateChildren = useRef();
-  const labelValueDescription = useRef();
-  const [searchText, setSearchText] = useState("");
+  const labelKey = props.labelKey
+  const valuePrefix = useRef()
+  const partialName = useRef()
+  const labelValueValue = useRef()
+  const labelValueParentValue = useRef()
+  const labelValueName = useRef()
+  const graphRef = useRef()
+  const labelValueUpdateChildren = useRef()
+  // const labelValueDescription = useRef() //TODO: implement description
+  const [searchText, setSearchText] = useState("")
   const [showGraph, setShowGraph] = useState(false)
   const [tree, setTree] = useState({ nodes: [], links: [] })
   const [graph, setGraph] = useState({ nodes: [], links: [] })
   const [selectedNode, setSelectedNode] = useState({})
 
-  const clearInputs = () => {
-    labelValueValue.current.value = ""
-  }
-
   const selectNode = (node) => {
-    labelValueValue.current.value = node.value;
-    labelValueParentValue.current.value = node.parentValue;
-    labelValueName.current.value = node.name;
+    labelValueValue.current.value = node.value
+    labelValueParentValue.current.value = node.parentValue
+    labelValueName.current.value = node.name
 
-    setSelectedNode(node);
+    setSelectedNode(node)
   }
 
   const handleNodeClick = useCallback(node => {
     // Aim at node from outside it
-    const distance = 400;
-    const distRatio = 1 + distance / Math.hypot(node.y, node.x, node.z);
+    const distance = 400
+    const distRatio = 1 + distance / Math.hypot(node.y, node.x, node.z)
 
     graphRef.current.cameraPosition(
       { x: node.x * distRatio, y: node.y * distRatio, z: node.z * distRatio }, // new position
       node, // lookAt ({ x, y, z })
       2000  // ms transition duration
-    );
-  }, [graphRef]);
+    )
+  }, [graphRef])
 
   const getLabelValues = async () => {
     if (!labelKey) return
     const url = `https://localhost:5021/labels/${labelKey}/values?valuePrefix=${valuePrefix.current.value}&partialName=${partialName.current.value}`
     const json = await apiCall(url, "GET")
-    const labels = normalizeValues(json);
-    setTree(mapToTree(labels));
-    setGraph(mapToGraph(labels));
+    const labels = normalizeValues(json)
+    setTree(mapToTree(labels))
+    setGraph(mapToGraph(labels))
   }
   const postLabelValue = async () => {
     if (!labelKey) return
@@ -140,7 +135,6 @@ export default memo(props => {
     const url = `https://localhost:5021/labels/${labelKey}/values/${selectedNode.value}`
     await apiCall(url, "DELETE")
     setSelectedNode({})
-    clearInputs()
     await getLabelValues()
   }
 
@@ -185,7 +179,7 @@ export default memo(props => {
         nodeVisibility={x => x.value.includes(searchText)}
         linkVisibility={x => x.source.value ? x.source.value.includes(searchText) : x.source.includes(searchText)}
         onNodeClick={node => {
-          console.log("node", node);
+          console.log("node", node)
           selectNode(node)
         }}
         onLinkClick={link => console.log("link", link)}
@@ -193,12 +187,12 @@ export default memo(props => {
         nodeCanvasObjectMode={() => 'after'}
         nodeLabel={node => `${node.name} (${node.contentType})`}
         nodeCanvasObject={(node, ctx, globalScale) => {
-          const label = node.name;
-          const fontSize = 10 / globalScale;
-          ctx.font = `${fontSize}px Sans-Serif`;
-          ctx.textAlign = 'center';
-          ctx.fillStyle = 'black'; //node.color;
-          ctx.fillText(label, node.x, node.y - 10 / globalScale);
+          const label = node.name
+          const fontSize = 10 / globalScale
+          ctx.font = `${fontSize}px Sans-Serif`
+          ctx.textAlign = 'center'
+          ctx.fillStyle = 'black'
+          ctx.fillText(label, node.x, node.y - 10 / globalScale)
         }}
       />
 
@@ -229,96 +223,3 @@ export default memo(props => {
     </div>
   )
 }, (prevProps, nextProps) => true)
-
-
-
-// function App() {
-//   const treeRef = useRef();
-//   const graphRef = useRef();
-//   const [tags, setTags] = useState([]);
-//   const [tagNames, setTagNames] = useState([]);
-//   const [enableTree, toggleTree] = useState(true);
-//   const [enableGraph, toggleGraph] = useState(false);
-//   const [searchText, setSearchText] = useState("");
-
-
-
-//   return (
-//     <div>
-//       <div style={{ position: "fixed" }}>
-//         <button onClick={() => toggleTree(!enableTree)}>Vis tre ({contentTree.nodes.length} noder)</button>
-//         <button onClick={() => toggleGraph(!enableGraph)}>Vis graf ({contentGraph.nodes.length} noder)</button>
-//         <input type="text" placeholder="Søk" onInput={(e) => setSearchText(e.target.value)} />
-//         <pre style={{ margin: 0 }}>
-//           Tags på dokument i db:<br />
-//           {JSON.stringify(tags, null, 1)}<br /><br />
-//           Tags på dokument i søk:<br />
-//           {JSON.stringify(tagNames, null, 1)}<br /><br />
-//         </pre>
-//       </div>
-//       <br />
-//       {
-//         enableTree ?
-//           <div>
-
-//             <ForceGraph2D
-//               ref={treeRef}
-//               graphData={contentTree}
-//               dagMode={"td"}
-//               nodeAutoColorBy="contentType"
-//               nodeVal={node => 50 / node.level}
-//               nodeVisibility={x => x.value.includes(searchText)}
-//               linkVisibility={x => x.source.value ? x.source.value.includes(searchText) : x.source.includes(searchText)}
-//               onNodeClick={node => {
-//                 console.log("node", node);
-//                 const newTags = [...new Set([...tags, node.value64])];
-//                 setTags(newTags)
-
-//                 var ancestors = newTags.map(x => getAncestorsByValue64(x, [])).flat().filter((v, i, a) => a.findIndex(t => (t.value64 === v.value64)) === i)
-//                 setTagNames([...new Set([...tagNames, ...ancestors.map(x => x.name)])])
-//               }}
-//               onLinkClick={link => console.log("link", link)}
-//               linkDirectionalParticles={0}
-//               nodeCanvasObjectMode={() => 'after'}
-//               nodeLabel={node => `${node.name} (${node.contentType})`}
-//               nodeCanvasObject={(node, ctx, globalScale) => {
-//                 const label = node.name;
-//                 const fontSize = 10 / globalScale;
-//                 ctx.font = `${fontSize}px Sans-Serif`;
-//                 ctx.textAlign = 'center';
-//                 ctx.fillStyle = 'black'; //node.color;
-//                 ctx.fillText(label, node.x, node.y - 10 / globalScale);
-//               }}
-//             />
-//             {/* })} */}
-//           </div>
-//           : null
-//       }
-//       {
-//         enableGraph ?
-//           <ForceGraph3D
-//             ref={graphRef}
-//             graphData={contentGraph}
-//             showNavInfo={false}
-//             nodeAutoColorBy="contentType"
-//             nodeVal={node => 50 / node.level}
-//             nodeVisibility={x => x.value.includes(searchText) || x.values.some(y => y.includes(searchText))}
-//             linkVisibility={x => x.value.includes(searchText)}// ["Version", "Grade", "Subject"].includes(x.contentType)}
-//             onNodeClick={node => {
-//               console.log("clicked node", node)
-//               handleNodeClick(node)
-//             }}
-//             onLinkClick={link => {
-//               console.log("clicked link", link)
-//               // handleNodeClick(link.target)
-//             }}
-//             linkDirectionalParticles={0}
-//             nodeLabel={node => `${node.name} (${node.contentType})`}
-//             linkLabel={link => ``}
-//           />
-//           : null
-//       }
-//     </div >
-//   );
-// }
-
